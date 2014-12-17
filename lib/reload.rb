@@ -1,3 +1,5 @@
+require 'pry'
+
 module Reloader
   @@files ||= {}
 
@@ -32,15 +34,14 @@ module Reloader
     raise ArgumentError, 'v must be a Hash' unless v.is_a? Hash
     raise ArgumentError, 'consts must be an array of Symbols' unless v[:consts].is_a? Array and v[:consts].all?{|e| e.is_a? Symbol}
     raise ArgumentError, 'mtime must be an nil or of a Fixnum' unless v[:mtime].nil? or v[:mtime].is_a? Fixnum
-    @@files[file] = {}
+    @@files[file] ||= {}
     @@files[file][:consts] = v[:consts]
-    @@files[file][:mtime] = v[:mtime] || 0
+    @@files[file][:mtime] = v[:mtime] if not v[:mtime].nil?
   end
 
   # create a <file> with all old constants (no module/class), load news, and then only keep news. it file not exists, delete it from the list
   def self.up! file
     if File.exists? file
-      binding.pry
       Reloader[file] = {consts: Object.constants, mtime: File.mtime(file).to_i}
       load(file)
       Reloader[file] = {consts: Object.constants - Reloader[file][:consts]}
@@ -51,7 +52,7 @@ module Reloader
 
   # remove all constants of <file> (only existing in this file) and then empty the <file>
   def self.down! file
-    Reloader[file].each{|const| Object.send(remove_const, const) if consts.flatten.count(const) == 1}
+    Reloader[file][:consts].each{|const| Object.send(:remove_const, const) if defined? eval(const) if consts.flatten.count(const) <= 1}
     Reloader[file] = {consts: [], mtime: 0}
   end
 
@@ -62,6 +63,7 @@ module Reloader
     return if not File.exists? file or File.mtime(file).to_i <= Reloader[file][:mtime]
     puts "#{file} changed"
     Reloader.down! file
+    binding.pry
     Reloader.up! file
     return
   end
