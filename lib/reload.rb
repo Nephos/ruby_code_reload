@@ -43,7 +43,7 @@ module Reloader
   def self.up! file
     if File.exists? file
       Reloader[file] = {consts: Object.constants, mtime: File.mtime(file).to_i}
-      load(file)
+      Reloader.silence_warnings{load(file)}
       Reloader[file] = {consts: Object.constants - Reloader[file][:consts]}
     else
       Reloader.delete file
@@ -52,27 +52,31 @@ module Reloader
 
   # remove all constants of <file> (only existing in this file) and then empty the <file>
   def self.down! file
-    Reloader[file][:consts].each{|const| Object.send(:remove_const, const) if defined? eval(const) if consts.flatten.count(const) <= 1}
+    Reloader[file][:consts].each{|const| Object.send(:remove_const, const) if defined? eval(const) == 'constant'}
     Reloader[file] = {consts: [], mtime: 0}
   end
 
   # if file exists and changed, then down it and then up, else raise error
   def self.reload! file
     test_exists file
-    puts "reload #{file}"
-    return if not File.exists? file or File.mtime(file).to_i <= Reloader[file][:mtime]
-    puts "#{file} changed"
+    return false if not File.exists? file or File.mtime(file).to_i <= Reloader[file][:mtime]
     Reloader.down! file
-    binding.pry
     Reloader.up! file
-    return
+    return true
   end
 
   # if file not exists, then up else raise error
   def self.load! file
     test_not_exists file
     Reloader.up! file
-    return
+    return true
+  end
+
+  def self.silence_warnings(&block)
+    original_verbose, $VERBOSE = $VERBOSE, nil
+    result = block.call
+    $VERBOSE = original_verbose
+    return result
   end
 
 end
@@ -82,3 +86,5 @@ def reload file
   file += '.rb' if not file =~ /.\../
   Reloader.files.include?(file) ? Reloader.reload!(file) : Reloader.load!(file)
 end
+
+binding.pry
