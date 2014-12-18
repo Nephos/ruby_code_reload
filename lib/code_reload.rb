@@ -30,6 +30,9 @@ module CodeReload
   def self.[] file
     return @@files[file]
   end
+  def self.delete file
+    @@files.delete file
+  end
 
   # set the file <file> with <consts>, <mtime>, and <auto> if not nil
   def self.[]= file, v={consts: []}
@@ -44,19 +47,16 @@ module CodeReload
 
   # create a <file> with all old constants (no module/class), load news, and then only keep news. it file not exists, delete it from the list
   def self.up! file, auto=nil
-    if File.exists? file
-      CodeReload[file] = {consts: Object.constants, mtime: File.mtime(file).to_i, auto: auto}
-      CodeReload.silence_warnings{load(file)}
-      CodeReload[file] = {consts: Object.constants - CodeReload[file][:consts]}
-    else
-      CodeReload.delete file
-    end
+    CodeReload[file] = {consts: Object.constants, mtime: File.mtime(file).to_i, auto: auto}
+    CodeReload.silence_warnings{load(file)}
+    CodeReload[file] = {consts: Object.constants - CodeReload[file][:consts]}
   end
 
   # remove all constants of <file> (only existing in this file) and then empty the <file>
   def self.down! file
     CodeReload[file][:consts].each{|const| Object.send(:remove_const, const) if defined? eval(const) == 'constant'}
-    CodeReload[file] = {consts: [], mtime: 0}
+    #CodeReload[file] = {consts: [], mtime: 0}
+    CodeReload.delete file
   end
 
   # if file exists and changed, then down it and then up, else raise error
