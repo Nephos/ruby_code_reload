@@ -86,6 +86,7 @@ end
 
 def reload file
   raise ArgumentError, 'String __FILE__ expected' unless file.is_a? String
+  file = File.expand_path file
   file += '.rb' if not file =~ /.\../
   CodeReload.files.include?(file) ? CodeReload.reload!(file) : CodeReload.load!(file)
 end
