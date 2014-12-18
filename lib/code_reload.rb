@@ -1,3 +1,5 @@
+require_relative 'code_reload/version'
+
 module CodeReload
   @@files ||= {}
 
