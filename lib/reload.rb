@@ -1,5 +1,3 @@
-require 'pry'
-
 module Reloader
   @@files ||= {}
 
@@ -16,7 +14,9 @@ module Reloader
   def self.files
     @@files.keys
   end
-
+  def self.autofiles
+    @@files.keep_if{|f,v| v[:auto] == true}.keys
+  end
   def self.consts
     @@files.values.map{|e|e[:consts]}
   end
@@ -29,20 +29,21 @@ module Reloader
     return @@files[file]
   end
 
-  # set the file <file> with <consts> and <mtime> if not nil
-  def self.[]= file, v={consts: nil, mtime: nil}
+  # set the file <file> with <consts>, <mtime>, and <auto> if not nil
+  def self.[]= file, v={consts: []}
     raise ArgumentError, 'v must be a Hash' unless v.is_a? Hash
     raise ArgumentError, 'consts must be an array of Symbols' unless v[:consts].is_a? Array and v[:consts].all?{|e| e.is_a? Symbol}
     raise ArgumentError, 'mtime must be an nil or of a Fixnum' unless v[:mtime].nil? or v[:mtime].is_a? Fixnum
     @@files[file] ||= {}
-    @@files[file][:consts] = v[:consts]
+    @@files[file][:consts] = v[:consts] || []
+    @@files[file][:auto] = v[:auto] if not v[:auto].nil?
     @@files[file][:mtime] = v[:mtime] if not v[:mtime].nil?
   end
 
   # create a <file> with all old constants (no module/class), load news, and then only keep news. it file not exists, delete it from the list
-  def self.up! file
+  def self.up! file, auto=nil
     if File.exists? file
-      Reloader[file] = {consts: Object.constants, mtime: File.mtime(file).to_i}
+      Reloader[file] = {consts: Object.constants, mtime: File.mtime(file).to_i, auto: auto}
       Reloader.silence_warnings{load(file)}
       Reloader[file] = {consts: Object.constants - Reloader[file][:consts]}
     else
@@ -57,18 +58,18 @@ module Reloader
   end
 
   # if file exists and changed, then down it and then up, else raise error
-  def self.reload! file
+  def self.reload! file, auto=nil
     test_exists file
     return false if not File.exists? file or File.mtime(file).to_i <= Reloader[file][:mtime]
     Reloader.down! file
-    Reloader.up! file
+    Reloader.up! file, auto
     return true
   end
 
   # if file not exists, then up else raise error
-  def self.load! file
+  def self.load! file, auto=nil
     test_not_exists file
-    Reloader.up! file
+    Reloader.up! file, auto
     return true
   end
 
@@ -87,4 +88,15 @@ def reload file
   Reloader.files.include?(file) ? Reloader.reload!(file) : Reloader.load!(file)
 end
 
+def auto_reload file
+  reload(file)
+  Reloader[file][:auto] = true
+  #create a Thread
+  loop do
+    Reloader.autofiles.each{|file| puts reload(file)}
+    sleep 0.5
+  end
+end
+
+require 'pry'
 binding.pry
