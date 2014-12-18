@@ -1,3 +1,3 @@
-module Reloader
+module CodeReload
   VERSION = '1.0.0'
 end

@@ -1,4 +1,4 @@
-module Reloader
+module CodeReload
   @@files ||= {}
 
   def self.test_not_exists file
@@ -43,33 +43,33 @@ module Reloader
   # create a <file> with all old constants (no module/class), load news, and then only keep news. it file not exists, delete it from the list
   def self.up! file, auto=nil
     if File.exists? file
-      Reloader[file] = {consts: Object.constants, mtime: File.mtime(file).to_i, auto: auto}
-      Reloader.silence_warnings{load(file)}
-      Reloader[file] = {consts: Object.constants - Reloader[file][:consts]}
+      CodeReload[file] = {consts: Object.constants, mtime: File.mtime(file).to_i, auto: auto}
+      CodeReload.silence_warnings{load(file)}
+      CodeReload[file] = {consts: Object.constants - CodeReload[file][:consts]}
     else
-      Reloader.delete file
+      CodeReload.delete file
     end
   end
 
   # remove all constants of <file> (only existing in this file) and then empty the <file>
   def self.down! file
-    Reloader[file][:consts].each{|const| Object.send(:remove_const, const) if defined? eval(const) == 'constant'}
-    Reloader[file] = {consts: [], mtime: 0}
+    CodeReload[file][:consts].each{|const| Object.send(:remove_const, const) if defined? eval(const) == 'constant'}
+    CodeReload[file] = {consts: [], mtime: 0}
   end
 
   # if file exists and changed, then down it and then up, else raise error
   def self.reload! file, auto=nil
     test_exists file
-    return false if not File.exists? file or File.mtime(file).to_i <= Reloader[file][:mtime]
-    Reloader.down! file
-    Reloader.up! file, auto
+    return false if not File.exists? file or File.mtime(file).to_i <= CodeReload[file][:mtime]
+    CodeReload.down! file
+    CodeReload.up! file, auto
     return true
   end
 
   # if file not exists, then up else raise error
   def self.load! file, auto=nil
     test_not_exists file
-    Reloader.up! file, auto
+    CodeReload.up! file, auto
     return true
   end
 
@@ -85,18 +85,15 @@ end
 def reload file
   raise ArgumentError, 'String __FILE__ expected' unless file.is_a? String
   file += '.rb' if not file =~ /.\../
-  Reloader.files.include?(file) ? Reloader.reload!(file) : Reloader.load!(file)
+  CodeReload.files.include?(file) ? CodeReload.reload!(file) : CodeReload.load!(file)
 end
 
 def auto_reload file
   reload(file)
-  Reloader[file][:auto] = true
+  CodeReload[file][:auto] = true
   #create a Thread
   loop do
-    Reloader.autofiles.each{|file| puts reload(file)}
+    CodeReload.autofiles.each{|file| puts reload(file)}
     sleep 0.5
   end
 end
-
-require 'pry'
-binding.pry
